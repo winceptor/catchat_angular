@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en" ng-app="app">
+  <head>
+    <title>Chat Example</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/bootstrap-responsive.min.css">
+
+    
+    <link type="text/css" rel="stylesheet" href="/css/stylesheet.css" />
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/jquery.min.js"></script>
+    <script src="/js/bootstrap.min.js"></script>
+    <script src="/js/angular.min.js"></script>
+
+    
+    <link type="text/css" rel="stylesheet" href="/css/catparser.css" />
+    <script type="text/javascript" src="/js/catparser.js"></script>
+    
+  </head>
+  <body  ng-controller="ChatController"  ng-mousemove="mousemove($event)">
+
+    
+    <div class="cursor" ng-repeat="cur in cursors" style="position: absolute; left: {{ cur.x }}px; top: {{ cur.y }}px; opacity: {{ cur.opacity }};"><img class="cursorimage" src="/img/cursor.png"><span class="cursorname">{{ cur.text || "" }}</span></div>
+    
+    <div class="container-flex">
+      <div class="row-fluid titlebox">
+        <h1>Catchat</h1>
+        <div class="checkbox">
+          <label>
+            <input type="checkbox" name="notifications" ng-model="notifications" ng-change="setnotifications()"> Notifications {{ notifications }}
+          </label>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="container-fluid">
+      <div class="row-fluid">
+        <div class="well userbox">
+          <span class="userlisttitle">Local Users:</span>
+          <span class="userlist" ng-repeat="user in roster">{{ user.username || "Anonymous" }}</span>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="container-fluid">
+      
+          <div class="row-fluid">
+            <div class="well messagebox">
+              <div class="row-fluid controls">
+                <form ng-submit="send()">
+                  <div class="span2">
+                    <input type="text" class="input-block-level" ng-model="username" ng-change="setName()" placeholder="Your Name" ng-disabled="!identified" maxlength="30">
+                  </div>
+                  <div class="span10">
+                    <input type="text" class="input-block-level" ng-model="text" placeholder="Message (press enter to edit your last)" focus-me="mainfocus" ng-disabled="!identified" maxlength="maxtextlength">
+                    <input type="submit" class="cloaked" value="Send" ng-disabled="loading">
+                  </div>
+                </form>
+              </div>
+              
+              
+              <div class="message" id="{{ msg.messageid  }}" ng-repeat="msg in outputmessages() | orderBy:'-'" >
+              
+                <div class="row-fluid messagename">{{ msg.user.username || "Anonymous" }}</div>
+                <div class="row-fluid messagetext">
+                  <div class="parsed" ng-hide="msg.editing" ng-bind-html="msg.parsed | html" ng-trim="false"></div>
+                  
+                  
+                  <form class="unparsed editbox" ng-show="msg.editing" ng-submit="update(msg)">
+                    <input type="text" name="text" class="edittext input-block-level" focus-me="msg.focus" ng-model="msg.text" ng-blur="stopedit(msg)" maxlength="maxtextlength" placeholder="Message (press enter to delete empty)">
+                    <input type="submit" class="cloaked" value="Update" ng-disabled="loading">
+                  </form>
+                </div>
+                <div class="messagecontrols" ng-hide="msg.editing">
+                    <span class="editbutton icon-cog" ng-click="startedit(msg)" ng-show="msg.editable"></span>
+                  </div>
+              </div>
+              
+            </div>
+          </div>
+        </div>
+   
+        
+    </div>
+    
+    <div class="container-fluid">
+      <div class="row-fluid">
+        <div id="guide" class="guide well"></div>
+      </div>
+    </div>
+    
+    <div class="container-fluid">
+      <div class="row-fluid">
+        <div class="qrcode">
+          <img class="wrap" src="/img/qr.png">
+        </div>
+     </div>
+    </div>
+    
+    <div class="container-fluid">
+      <div class="row-fluid">
+        <div class="footer">
+          <p class="pull-right">Experimental groupchat by Creec Winceptor</p>
+        </div>
+        
+      </div>
+    </div>
+    
+    
+            
+    <div class="wrap infobox" ng-class="{'visible': loading }">
+      <div class="container-flex">
+        <div class="row-fluid">
+          <div class="infotext">{{ info }}</div>
+        </div>
+      </div>
+    </div>
+    
+  </body>
+  <script src="/js/javascript.js"></script>
+  
+</html>

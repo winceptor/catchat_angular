@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en" ng-app>
+  <head>
+    <title>Chat Example</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/bootstrap-responsive.min.css">
+    
+    <link type="text/css" rel="stylesheet" href="/css/catparser.css" />
+    <script type="text/javascript" src="/js/catparser.js"></script>
+
+    
+    <style>
+    html {
+     
+    }
+    body {
+    	padding: 0px;
+    	min-height: 100vh;
+    	max-width: 100vw;
+    	width: 100%;
+    	margin: 0px;
+      padding-top: 60px;
+      
+      cursor: none;
+      overflow-x: hidden;
+     }
+      
+    .cursor {
+      pointer-events: none;
+      transition: all 0.5s ease;
+      z-index: 99;
+    }
+    .cursorname {
+      margin-left: 5px;
+      z-index: 99;
+    }
+    .cursorimage {
+      height: 30px;
+      width: auto;
+      z-index: 99;
+    }
+    .content {
+      z-index: 1;
+    }
+    </style>
+    <script>
+      function ChatController($scope) {
+        var socket = io.connect();
+
+        $scope.messages = [];
+        $scope.roster = [];
+        
+        $scope.mousedata = {};
+        $scope.cursors = [];
+        $scope.cursor = {};
+        
+        $scope.name = '';
+        $scope.text = '';
+
+        socket.on('connect', function () {
+          $scope.setName();
+        });
+
+        socket.on('message', function (msg) {
+          var unparsed = msg.text;
+          var parsed = parsemessage(escapehtml(unparsed));
+          msg.text = parsed;
+          $scope.messages.unshift(msg);
+          $scope.$apply();
+        });
+
+        socket.on('roster', function (names) {
+          $scope.roster = names;
+          $scope.$apply();
+        });
+        
+        socket.on('cursors', function (cursors) {
+          $scope.cursors = cursors;
+          $scope.$apply();
+        });
+
+        $scope.send = function send() {
+          console.log('Sending message:', $scope.text);
+          socket.emit('message', $scope.text);
+          $scope.text = '';
+        };
+
+        $scope.setName = function setName() {
+          socket.emit('identify', $scope.name);
+        };
+        
+        $scope.mousemove = function($event) {
+          $scope.mousedata = $event;
+          $scope.cursor = {
+            "x": $event.pageX,
+            "y": $event.pageY,
+            "name": $scope.name
+          };
+          socket.emit('mousemove', $scope.cursor);
+        };
+      }
+    </script>
+  </head>
+  <body  ng-controller="ChatController"  ng-mousemove="mousemove($event)">
+    <div class="cursor" ng-repeat="cur in cursors" style="position: absolute; left: {{ cur.x }}px; top: {{ cur.y }}px;"><img class="cursorimage" src="/img/cursor.png"><span class="cursorname">{{ cur.name || "Anonymous" }}</span></div>
+    
+    <div class="container">
+
+      
+      <div class="navbar navbar-fixed-top navbar-inverse">
+        <div class="navbar-inner">
+          <div class="pull-right">
+            <a href="https://c9.io" class="brand">Cloud9 IDE</a>
+          </div>
+        </div>
+      </div>
+      <div class="page-header">
+        <h1>Chat Example</h1>
+      </div>
+      <div class="row">
+        <div class="span3">
+          <ul class="nav nav-list well">
+            <li class="nav-header">Local Users</li>
+            <li ng-repeat="user in roster" ng-bind="user">
+            </li>
+          </ul>
+        </div>
+        <div class="span9">
+          <div class="row controls">
+            <form ng-submit="send()">
+              <div class="span2"><input type="text" class="input-block-level" ng-model="name" ng-change="setName()" placeholder="Your Name"></div>
+              <div class="input-append span7">
+                <input type="text" class="span6" ng-model="text" placeholder="Message">
+                <input type="submit" class="span1 btn btn-primary" value="Send" ng-disabled="!text">
+              </div>
+            </form>
+          </div>
+          
+          <table class="table table-striped table-bordered">
+            <thead>
+              <tr>
+                <th class="span2">Name</th>
+                <th class="span7">Text</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr ng-repeat="msg in messages">
+                <td class="span2" ng-bind="msg.name"></td>
+                <td class="span7" ng-bind-html-unsafe="msg.text"></td>
+              </tr>
+            </tbody>
+          </table>
+          
+        </div>
+      </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/jquery.min.js"></script>
+    <script src="/js/bootstrap.min.js"></script>
+    <script src="/js/angular.min.js"></script>
+  </body>
+</html>

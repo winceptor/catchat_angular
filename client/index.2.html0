@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en" ng-app>
+  <head>
+    <title>Chat Example</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/bootstrap-responsive.min.css">
+    
+    <link type="text/css" rel="stylesheet" href="/css/catparser.css" />
+    <script type="text/javascript" src="/js/catparser.js"></script>
+
+    
+    <style>
+    html {
+     
+    }
+    body {
+    	padding: 0px;
+    	min-height: 100vh;
+    	max-width: 100vw;
+    	width: 100%;
+    	margin: 0px;
+      padding-top: 10px;
+      
+      cursor: none;
+      overflow-x: hidden;
+     }
+      
+    .cursor {
+      pointer-events: none;
+      transition: all 0.5s ease;
+      z-index: 99;
+    }
+    .cursorname {
+      margin-left: 5px;
+      z-index: 99;
+    }
+    .cursorimage {
+      height: 30px;
+      width: auto;
+      z-index: 99;
+    }
+    .content {
+      z-index: 1;
+    }
+    
+    .parsed {
+      border-width: 1px;
+    	border-style: solid;
+    	border-radius: 3px;
+    	border-color: black;
+    	padding: 5px;
+    }
+    
+    textarea {
+      overflow: hidden;
+      outline: none;
+      resize: none;
+    }
+    </style>
+    <script>
+
+
+function doGetCaretPosition(ctrl)
+{
+ var CaretPos = 0;
+
+   if (ctrl.selectionStart || ctrl.selectionStart == 0)
+   {// Standard.
+    CaretPos = ctrl.selectionStart;
+   }
+   else if (document.selection)
+   {// Legacy IE
+    ctrl.focus ();
+    var Sel = document.selection.createRange ();
+    Sel.moveStart ('character', -ctrl.value.length);
+    CaretPos = Sel.text.length;
+   }
+  
+   return (CaretPos);
+  }
+  
+  
+  function setCaretPosition(ctrl,pos)
+  {
+   if (ctrl.setSelectionRange)
+   {
+    ctrl.focus();
+    ctrl.setSelectionRange(pos,pos);
+   }
+   else if (ctrl.createTextRange)
+   {
+    var range = ctrl.createTextRange();
+    range.collapse(true);
+    range.moveEnd('character', pos);
+    range.moveStart('character', pos);
+    range.select();
+   }
+  }
+  
+  function resize () {
+      text.style.height = 'auto';
+      text.style.height = text.scrollHeight+'px';
+  }
+  /* 0-timeout to get the already changed text */
+  function delayedResize () {
+      window.setTimeout(resize, 0);
+  }
+
+
+      function ChatController($scope) {
+        var socket = io.connect();
+        
+        var textinputdiv = document.getElementById("textinput");
+        
+        
+        
+        $scope.disableinput = true;
+
+        $scope.messages = [];
+        $scope.roster = [];
+        
+        $scope.mousedata = {};
+        $scope.cursors = [];
+        $scope.cursor = {};
+        
+        $scope.name = localStorage.getItem('name') || '';
+        $scope.text = '';
+        
+        $scope.textinput = "";
+        $scope.textoutput = "";
+
+        socket.on('connect', function () {
+          $scope.setName();
+        });
+
+        socket.on('message', function (msg) {
+          var unparsed = msg.text;
+          var parsed = parsemessage(unparsed);
+          msg.text = parsed;
+          $scope.messages.unshift(msg);
+          $scope.$apply();
+        });
+        
+        socket.on('textchange', function (data) {
+          var text = data.text;
+          var caret = data.caret;
+          
+          var caretpos = doGetCaretPosition(textinputdiv);
+          
+          //var unparsed = msg.text;
+          //var parsed = parsemessage(unparsed);
+          //msg.text = parsed;
+          $scope.textinput = text;
+          $scope.textoutput = parsemessage($scope.textinput);
+          $scope.$apply();
+          
+          if (caret<=caretpos) {
+            caretpos+= data.change;
+          }
+          setCaretPosition(textinputdiv, caretpos);
+          
+          $scope.disableinput = false;
+          
+          textinputdiv.style.height = 'auto';
+          textinputdiv.style.height = textinputdiv.scrollHeight+'px';
+        });
+
+        socket.on('roster', function (names) {
+          $scope.roster = names;
+          $scope.$apply();
+        });
+        
+        socket.on('cursors', function (cursors) {
+          $scope.cursors = cursors;
+          $scope.$apply();
+        });
+
+        $scope.send = function send() {
+          console.log('Sending message:', $scope.text);
+          socket.emit('message', $scope.text);
+          $scope.text = '';
+        };
+
+        $scope.setName = function setName() {
+          socket.emit('identify', $scope.name);
+          
+          localStorage.setItem('name', $scope.name);
+        };
+        
+        $scope.changeText = function changeText() {
+          console.log("changed text");
+          var data = {};
+          data.caret = doGetCaretPosition(textinputdiv);
+          data.text = $scope.textinput;
+          
+          socket.emit('changetext', data);
+          
+
+          $scope.textoutput = parsemessage($scope.textinput);
+          //$scope.$apply();
+          
+          //textinputdiv.style.height = 'auto';
+          //textinputdiv.style.height = textinputdiv.scrollHeight+'px';
+          //$scope.disableinput = true;
+        };
+        
+        
+        $scope.mousemove = function($event) {
+          $scope.mousedata = $event;
+          $scope.cursor = {
+            "x": $event.pageX,
+            "y": $event.pageY,
+            "name": $scope.name
+          };
+          socket.emit('mousemove', $scope.cursor);
+        };
+      }
+    </script>
+  </head>
+  <body  ng-controller="ChatController"  ng-mousemove="mousemove($event)">
+    <div class="cursor" ng-repeat="cur in cursors" style="position: absolute; left: {{ cur.x }}px; top: {{ cur.y }}px;"><img class="cursorimage" src="/img/cursor.png"><span class="cursorname">{{ cur.name || "Anonymous" }}</span></div>
+    
+    <div class="container">
+      
+    
+      <div class="row">
+        
+        <div class="span12">
+          <div class="row controls">
+            <form ng-submit="send()">
+              <div class="span12"><input type="text" class="input-block-level" ng-model="name" maxlength="30" ng-change="setName()" placeholder="Your Name"></div>
+              
+            </form>
+            
+            
+          </div>
+          
+          <div class="row controls">
+            <div class="span12"><textarea id="textinput" class="autoExpand input-block-level" rows='3' data-min-rows='3' ng-disabled="disableinput" ng-model="textinput" ng-bind="textinput" ng-change="changeText()">
+                
+              </textarea>
+            </div>
+          </div>
+        
+        <div class="row controls">
+            <div class="span12"><div class="input-block-level parsed" ng-model="textoutput" ng-bind-html-unsafe="textoutput">
+                
+              </div>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/jquery.min.js"></script>
+    <script src="/js/bootstrap.min.js"></script>
+    <script src="/js/angular.min.js"></script>
+    <script>
+      var textinputdiv = document.getElementById("textinput");
+      $("#textinput").keyup(function(e) {
+        textinputdiv.style.height = 'auto';
+        textinputdiv.style.height = textinputdiv.scrollHeight+'px';
+        //while($(this).outerHeight() < this.scrollHeight + parseFloat($(this).css("borderTopWidth")) + parseFloat($(this).css("borderBottomWidth"))) {
+        //    $(this).height($(this).height()+1);
+        //};
+      });
+    </script>
+  </body>
+</html>

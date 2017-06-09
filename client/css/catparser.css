@@ -1,0 +1,143 @@
+.resize{
+	max-width: 100%;
+	max-height: 100%;
+    resize: both;
+    overflow: hidden;
+}
+
+.embedcontent{
+	max-width:100%; 
+	max-height:100%;
+	margin:auto;
+}
+
+.wrappercontent{
+	text-align: center;
+	display: inline-block;
+    vertical-align: middle;
+	font-size: 0px;
+}
+
+.embed{
+	position: relative;
+	padding-bottom: 56.25%;
+	height: 0px;
+	display: block;
+	width: 848px;
+	max-width: 100%;
+}
+.embed > * {
+	position: absolute;
+	top: 0px;
+	left: 0px;
+	width: 100%;
+	height: 100%;
+	border: none;
+}
+
+
+.thumbnailimage{
+	display: block;
+	max-width:320px; 
+	max-height:240px;
+	text-align: center;
+	display: table-cell;
+    vertical-align: middle;
+}
+.expandedimage{
+	display: block;
+	max-width:100%; 
+	height:auto;
+	text-align: center;
+	display: table-cell;
+    vertical-align: middle;
+}
+
+video, audio{
+	max-width:100%; 
+	max-height:100%;
+	resize: none;
+	overflow: hidden;
+	display: inline-block;
+}
+
+.unwrapper{
+	width: 100%;
+	height: 100%;
+	max-width:640px; 
+	display: block;
+	word-break: break-word;
+}
+
+.sizetoggle{
+    float:right;
+    width: 20%;
+}
+
+
+.wrapper{
+	box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+	border-width: 1px;
+	border-style: solid;
+	border-radius: 3px;
+	border-color: black;
+	background-color: transparent;
+	width: auto;
+	height: auto;
+	display: inline-block;
+	overflow: hidden;
+	vertical-align: top;
+	text-align: center;
+	max-width: 100%;
+	margin: 0px auto;
+	/*font-size: 0px;*/
+}
+
+.wrapper.special{
+	border-color: silver;
+}
+
+.buttontext {
+  overflow: hidden;
+  white-space: nowrap;
+  display: block;
+  text-overflow: ellipsis;
+}
+
+.parsed {
+	padding: 0px;
+	white-space: pre-wrap;       /* css-3 */
+    white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
+    white-space: -pre-wrap;      /* Opera 4-6 */
+    white-space: -o-pre-wrap;    /* Opera 7 */
+    word-wrap: break-word;       /* Internet Explorer 5.5+ */
+    display: block;
+}
+
+.parsed a, .parsed span, .parsed tr, .parsed td { white-space: pre; }
+
+.spoiler {
+	color: black;
+	display: inline-block;
+	background-color: black;
+	font-family: "Lucida Console", Monaco, monospace;
+}
+
+
+.greentext{
+	color: #789922;
+}
+.bluetext{
+	color: #226199;
+}
+.redtext{
+	color: #800;
+}
+
+.textwrap {
+    padding: 4px;
+    background-color: whitesmoke;
+    color: black;
+}

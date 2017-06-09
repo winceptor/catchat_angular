@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en" ng-app="app">
+  <head>
+    <title>Chat Example</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/bootstrap-responsive.min.css">
+    
+    <link type="text/css" rel="stylesheet" href="/css/catparser.css" />
+    <script type="text/javascript" src="/js/catparser.js"></script>
+    
+    <link type="text/css" rel="stylesheet" href="/css/stylesheet.css" />
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/jquery.min.js"></script>
+    <script src="/js/bootstrap.min.js"></script>
+    <script src="/js/angular.min.js"></script>
+
+    <script>
+
+
+  function getCaretPosition(ctrl)
+  {
+   var CaretPos = 0;
+
+   if (ctrl.selectionStart || ctrl.selectionStart == 0)
+   {// Standard.
+    CaretPos = ctrl.selectionStart;
+   }
+   else if (document.selection)
+   {// Legacy IE
+    ctrl.focus ();
+    var Sel = document.selection.createRange ();
+    Sel.moveStart ('character', -ctrl.value.length);
+    CaretPos = Sel.text.length;
+   }
+  
+   return (CaretPos);
+  }
+  
+  
+  function setCaretPosition(ctrl,pos)
+  {
+   if (ctrl.setSelectionRange)
+   {
+    ctrl.focus();
+    ctrl.setSelectionRange(pos,pos);
+   }
+   else if (ctrl.createTextRange)
+   {
+    var range = ctrl.createTextRange();
+    range.collapse(true);
+    range.moveEnd('character', pos);
+    range.moveStart('character', pos);
+    range.select();
+   }
+  }
+  
+  /*
+  function getCaretCharacterOffsetWithin(element) {
+    var caretOffset = 0;
+    var doc = element.ownerDocument || element.document;
+    var win = doc.defaultView || doc.parentWindow;
+    var sel;
+    if (typeof win.getSelection != "undefined") {
+        sel = win.getSelection();
+        if (sel.rangeCount > 0) {
+            var range = win.getSelection().getRangeAt(0);
+            var preCaretRange = range.cloneRange();
+            preCaretRange.selectNodeContents(element);
+            preCaretRange.setEnd(range.endContainer, range.endOffset);
+            caretOffset = preCaretRange.toString().length;
+        }
+    } else if ( (sel = doc.selection) && sel.type != "Control") {
+        var textRange = sel.createRange();
+        var preCaretTextRange = doc.body.createTextRange();
+        preCaretTextRange.moveToElementText(element);
+        preCaretTextRange.setEndPoint("EndToEnd", textRange);
+        caretOffset = preCaretTextRange.text.length;
+    }
+    return caretOffset;
+  }
+  
+  
+  // Move caret to a specific point in a DOM element
+  function SetCaretPosition(el, pos){
+  
+      // Loop through all child nodes
+      for(var node of el.childNodes){
+          if(node.nodeType == 3){ // we have a text node
+              if(node.length >= pos){
+                  // finally add our range
+                  var range = document.createRange(),
+                      sel = window.getSelection();
+                  range.setStart(node,pos);
+                  range.collapse(true);
+                  sel.removeAllRanges();
+                  sel.addRange(range);
+                  return -1; // we are done
+              }else{
+                  pos -= node.length;
+              }
+          }else{
+              pos = SetCaretPosition(node,pos);
+              if(pos == -1){
+                  return -1; // no need to finish the for loop
+              }
+          }
+      }
+      return pos; // needed because of recursion stuff
+  }
+  
+  var savedRange,isInFocus;
+  function saveSelection()
+  {
+      if(window.getSelection)//non IE Browsers
+      {
+          savedRange = window.getSelection().getRangeAt(0);
+      }
+      else if(document.selection)//IE
+      { 
+          savedRange = document.selection.createRange();  
+      } 
+  }
+  
+  function restoreSelection()
+  {
+      isInFocus = true;
+      //document.getElementById("area").focus();
+      if (savedRange != null) {
+          if (window.getSelection)//non IE and there is already a selection
+          {
+              var s = window.getSelection();
+              if (s.rangeCount > 0) 
+                  s.removeAllRanges();
+              s.addRange(savedRange);
+          }
+          else if (document.createRange)//non IE and no selection
+          {
+              window.getSelection().addRange(savedRange);
+          }
+          else if (document.selection)//IE
+          {
+              savedRange.select();
+          }
+      }
+  }*/
+    
+  function resize () {
+      text.style.height = 'auto';
+      text.style.height = text.scrollHeight+'px';
+  }
+  /* 0-timeout to get the already changed text */
+  function delayedResize () {
+      window.setTimeout(resize, 0);
+  }
+
+  var app = angular.module('app', []);
+  
+  // html filter (render text as html)
+  app.filter('html', ['$sce', function ($sce) { 
+      return function (text) {
+          return $sce.trustAsHtml(text);
+      };    
+  }])
+  
+  app.directive('focusMe', function($timeout, $parse) {
+    return {
+      //scope: true,   // optionally create a child scope
+      link: function(scope, element, attrs) {
+        var model = $parse(attrs.focusMe);
+        scope.$watch(model, function(value) {
+          if(value === true) { 
+            $timeout(function() {
+              element[0].focus(); 
+            });
+          }
+        });
+        // on blur event:
+        element.bind('blur', function() {
+           scope.$apply(model.assign(scope, false));
+        });
+      }
+    };
+  });
+
+  app.controller('ChatController', function($scope) {
+        //var $scope = this;
+      //function ChatController($scope) {
+        var socket = io.connect();
+        
+        var textinputdiv = document.getElementById("textinput");
+        var textoutputdiv = document.getElementById("textoutput");
+        
+        
+        
+        $scope.disableinput = false;
+        $scope.caret = {"pos":-1, "name":""};
+
+        $scope.messages = {};
+        $scope.msgs = [];
+        $scope.roster = [];
+        
+        $scope.mousedata = {};
+        $scope.cursors = {};
+        $scope.cursor = {};
+        
+        $scope.userid = localStorage.getItem('userid');
+        $scope.userhash = localStorage.getItem('userhash');
+        $scope.username = localStorage.getItem('username') || '';
+        $scope.text = '';
+        
+        $scope.textinput = "";
+        $scope.textoutput = "";
+
+        $scope.textcareted = "";
+        
+        $scope.identified = false;
+        
+        socket.on('connect', function () {
+          //$scope.setName();
+          getfocus();
+          $scope.identify();
+          
+          socket.emit('loadmessages', $scope.lastmessage);
+        });
+        
+        socket.on('identified', function (userdata) {
+          socket.userid = userdata.userid;
+          
+          $scope.userid = userdata.userid;
+          $scope.userhash = userdata.userhash;
+          $scope.username = userdata.username;
+          
+          
+          localStorage.setItem('userid', $scope.userid);
+          localStorage.setItem('userhash', $scope.userhash);
+          localStorage.setItem('username', $scope.username);
+          
+          $scope.identified = true;
+          
+          
+        });
+        
+
+        socket.on('message', function (msg) {
+          
+          msg.unparsed = msg.text;
+          
+          msg.parsed = parsemessage(msg.unparsed);
+          //msg.text = parsed;
+          
+          //console.log(msg);
+          
+          //$scope.messages.unshift(msg);
+          
+          msg.editable = msg.user.userid==$scope.userid;
+          
+          $scope.messages[msg.messageid] = msg;
+          
+          //$scope.messagearray = $scope.outputmessages();
+          
+          
+          $scope.lastmessage = msg;
+          
+          $scope.$apply();
+          
+          
+        });
+        
+        socket.on('updatedmessage', function (msg) {
+
+          
+          if (!msg.text || msg.text=="") {
+            //$scope.messages[msg.messageid] = undefined;
+            delete $scope.messages[msg.messageid];
+          }
+          else
+          {
+            msg.unparsed = msg.text;
+            
+            msg.parsed = parsemessage(msg.unparsed);
+            //msg.text = parsed;
+            
+            //console.log(msg);
+            
+            //$scope.messages.unshift(msg);
+            
+            msg.editable = msg.user.userid==$scope.userid;
+            
+            $scope.messages[msg.messageid] = msg;
+            
+            
+          }
+          $scope.messagearray = Object.values($scope.messages);
+          $scope.$apply();
+        });
+        
+        /*
+        socket.on('textchange', function (data) {
+          console.log("text reloaded");
+          var text = data.text;
+          //var caret = data.caret;
+          
+          
+          
+          //var caretpos = getCaretCharacterOffsetWithin(textoutputdiv);
+          
+          //saveSelection();
+          
+          //var unparsed = msg.text;
+          //var parsed = parsemessage(unparsed);
+          //msg.text = parsed;
+          $scope.textinput = text;
+          
+          $scope.$apply();
+          
+
+          $scope.render();
+          
+          
+          $scope.$apply();
+          
+          //if (caret<=caretpos) {
+            //caretpos+= data.change;
+          //}
+          //SetCaretPosition(textoutputdiv, caretpos);
+          
+          //restoreSelection();
+          
+          $scope.disableinput = false;
+          
+          textinputdiv.style.height = 'auto';
+          textinputdiv.style.height = textinputdiv.scrollHeight+'px';
+        });
+        */
+        /*
+        socket.on('char', function (data) {
+          console.log("r:" + data.char);
+          var char = data.char;
+          var caret = data.caret;
+          
+          var caretpos = doGetCaretPosition(textoutputdiv);
+          
+          var text = $scope.textinput;
+          $scope.textinput = text.slice(0, caret) + char + text.slice(caret);
+          
+          //var unparsed = msg.text;
+          //var parsed = parsemessage(unparsed);
+          //msg.text = parsed;
+          $scope.textoutput = parsemessage($scope.textinput);
+          $scope.$apply();
+          
+          if (caretpos>=caret) {
+            caretpos++;
+          }
+          setCaretPosition(textoutputdiv, caretpos);
+          
+          $scope.disableinput = false;
+          
+          
+          
+          textinputdiv.style.height = 'auto';
+          textinputdiv.style.height = textinputdiv.scrollHeight+'px';
+        });
+        */
+
+        socket.on('roster', function (users) {
+          $scope.roster = users;
+          $scope.$apply();
+        });
+        
+        /*
+        socket.on('cursors', function (cursors) {
+          //$scope.cursors = cursors;
+          $scope.$apply();
+        });
+        */
+        
+        var cursortimeout = 3; //seconds
+        socket.on('cursormove', function (cursor) {
+          $scope.cursors[cursor.userid] = cursor;
+          $scope.cursors[cursor.userid].opacity = 1;
+          $scope.cursors[cursor.userid].removetimer = setTimeout(function(){ $scope.cursors[cursor.userid].opacity = 0; }, 1000*cursortimeout);
+          $scope.$apply();
+        });
+        
+        socket.on('carets', function (carets) {
+          $scope.carets = carets;
+          $scope.$apply();
+        });
+        
+        $scope.outputmessages = function outputmessages() {
+          //console.log('Sending message:', $scope.text);
+          var obj = $scope.messages;
+          $scope.messagearray = Object.keys(obj).map(function (key) { return obj[key]; });
+          return $scope.messagearray;
+        };
+        
+
+        $scope.send = function send() {
+          //console.log('Sending message:', $scope.text);
+          socket.emit('message', $scope.text);
+          $scope.text = '';
+        };
+        
+        $scope.update = function update(msg) {
+          if (msg.user.userid!=$scope.userid){
+            return false;
+          }
+          
+          //var text = msg.text;
+          socket.emit('updatemessage', msg);
+          $scope.stopedit(msg);
+        };
+        
+           
+        $scope.startedit = function startedit(msg) {
+          console.log("msg.userid: " + msg.user.userid);
+          console.log("$scope.userid: " + $scope.userid);
+          if (msg.user.userid!=$scope.userid){
+            return false;
+          }
+          msg.editing = true;
+        };
+        
+        $scope.stopedit = function stopedit(msg) {
+          msg.editing = false;
+        };
+
+        $scope.setName = function setName() {
+          //socket.emit('setname', $scope.name);
+          
+          //localStorage.setItem('name', $scope.name);
+          $scope.identify();
+        };
+        
+        $scope.identify = function identify() {
+          var userdata = {};
+          userdata.userhash = $scope.userhash;
+          userdata.userid = $scope.userid;
+          userdata.username = $scope.username;
+          
+          console.log(userdata);
+          socket.emit('identify', userdata);
+        };
+        
+        /*
+        $scope.changeText = function changeText() {
+          console.log("changed text");
+          
+          var caret = getCaretPosition(textinputdiv);
+          
+          $scope.caret = {
+            "pos": caret,
+            "name": $scope.name
+          };
+          
+          var data = {};
+          data.caret = $scope.caret;
+          data.text = $scope.textinput;
+          
+          socket.emit('changetext', data);
+ 
+          //$scope.insertcaretandparse($scope.caret);
+          $scope.render();
+          
+          //$scope.textparsed = parsemessage($scope.textcareted);
+          //$scope.textoutput = $scope.textparsed;
+          //$scope.insertcaret($scope.caret);
+          
+          //$scope.$apply();
+          
+          //textinputdiv.style.height = 'auto';
+          //textinputdiv.style.height = textinputdiv.scrollHeight+'px';
+          //$scope.disableinput = true;
+        };
+        */
+        /*
+        $scope.changeHtml = function changeHtml() {
+          console.log("changed html");
+          
+          var text = textoutputdiv.textContent || textoutputdiv.innerText;
+          
+          var data = {};
+          data.caret = doGetCaretPosition(textinputdiv);
+          data.text = text;
+          
+          console.log(data);
+          
+          socket.emit('changetext', data);
+          //$scope.textinput = text;
+          
+          //$scope.textoutput = parsemessage($scope.textinput);
+          //$scope.$apply();
+          
+          //textinputdiv.style.height = 'auto';
+          //textinputdiv.style.height = textinputdiv.scrollHeight+'px';
+          //$scope.disableinput = true;
+        };
+        
+        $scope.charEvent = function charEvent($event) {
+          console.log("getting char");
+          
+          
+          var charCode = $event.which || $event.keyCode;
+          var charTyped = String.fromCharCode(charCode);
+          
+          var data = {};
+          data.caret = getCaretCharacterOffsetWithin(textinputdiv);
+          data.char = charTyped;
+          
+          //socket.emit('charinput', data);
+          console.log($event);
+
+          //$scope.textoutput = parsemessage($scope.textinput);
+          //$scope.$apply();
+          
+          //textinputdiv.style.height = 'auto';
+          //textinputdiv.style.height = textinputdiv.scrollHeight+'px';
+          //$scope.disableinput = true;
+          //$event.preventDefault();
+          
+        };
+        */
+        /*
+        $scope.inputEvent = function inputEvent($event) {
+          console.log("getting input");
+          
+          
+          var charCode = $event.which || $event.keyCode;
+          var charTyped = String.fromCharCode(charCode);
+          
+          var data = {};
+          data.caret = doGetCaretPosition(textoutputdiv);
+          data.char = charCode;
+          
+          //socket.emit('charinput', data);
+          console.log($event);
+
+          //$scope.textoutput = parsemessage($scope.textinput);
+          //$scope.$apply();
+          
+          //textinputdiv.style.height = 'auto';
+          //textinputdiv.style.height = textinputdiv.scrollHeight+'px';
+          //$scope.disableinput = true;
+          $event.preventDefault();
+          
+          $scope.caret = getCaretCharacterOffsetWithin(textoutputdiv);
+          console.log($scope.caret);
+          
+          var e = $.Event($event.type);
+          e.keyCode = charCode; // enter
+          $(textinputdiv).trigger(e);
+        };
+        */
+        $scope.changeInput = function changeInput($event) {
+          console.log("preventing input");
+          
+          
+          $event.preventDefault();
+          
+        };
+        
+        $scope.mousemove = function($event) {
+          $scope.mousedata = $event;
+          $scope.cursor = {
+            "x": $event.pageX,
+            "y": $event.pageY,
+            "text": $scope.username
+          };
+          socket.emit('mousemove', $scope.cursor);
+        };
+        
+        $scope.caretmove = function($event) {
+          var caret = getCaretPosition(textinputdiv);
+          
+          $scope.caret = {
+            "pos": caret,
+            "name": $scope.username
+          };
+          socket.emit('caretmove', $scope.caret);
+          
+          $scope.render();
+          
+          //$scope.textoutput = $scope.textparsed;
+          //$scope.insertcaret($scope.caret);
+        };
+        /*
+        $scope.render = function() {
+          var text = $scope.textinput;
+          var caret = $scope.caret;
+          if (caret.pos<0)
+          {
+            caret.pos = $scope.textinput.length;
+          }
+          var carethtml = '<span class="caret" alt="' + caret.name + '"></span>';
+          $scope.textoutput = parsemessage(escapehtml(text.slice(0, caret.pos))) + carethtml + parsemessage(escapehtml(text.slice(caret.pos)));
+          $scope.caret = caret;
+          //console.log($scope.textinput);
+        }*/
+      });
+    </script>
+  </head>
+  <body  ng-controller="ChatController"  ng-mousemove="mousemove($event)">
+    
+    
+    <div class="cursor" ng-repeat="cur in cursors" style="position: absolute; left: {{ cur.x }}px; top: {{ cur.y }}px; opacity: {{ cur.opacity }};"><img class="cursorimage" src="/img/cursor.png"><span class="cursorname">{{ cur.text || "" }}</span></div>
+    
+    <div class="container-fluid">
+
+      <div class="row-fluid">
+        <div class="span3">
+          <ul class="nav nav-list well">
+            <li class="nav-header">Local Users</li>
+            <li ng-repeat="user in roster" ng-bind="user.username">
+            </li>
+          </ul>
+        </div>
+        <div class="span9">
+          <div class="row-fluid controls">
+            <form ng-submit="send()">
+              <div class="span3"><input type="text" class="input-block-level" ng-model="username" ng-change="setName()" placeholder="Your Name" ng-disabled="!identified"></div>
+              <div class="span9">
+                <input type="text" class="input-block-level" ng-model="text" placeholder="Message" ng-disabled="!identified">
+              
+                <input type="submit" class="cloaked" value="Send" ng-disabled="!text">
+              </div>
+            </form>
+          </div>
+          
+          
+          <div class="row-fluid controls" ng-show="identified">
+            <table class="span12 table table-striped table-bordered">
+              <thead>
+                <tr>
+                  <th class="span3">Name</th>
+                  <th class="span9">Text</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr id="{{ msg.messageid  }}" ng-repeat="msg in outputmessages() | orderBy:'-'" >
+                  <td class="span3 messagename" ng-bind="msg.user.username"></td>
+                  <td class="span9 messagetext">
+                    <div class="parsed" ng-hide="msg.editing" ng-bind-html="msg.parsed | html" ng-trim="false"></div>
+                    <div class="messagecontrols" ng-hide="msg.editing">
+                      <span class="editbutton icon-cog" ng-click="startedit(msg)" ng-show="msg.editable"></span>
+                    </div>
+                    
+                    <form class="unparsed editbox" ng-show="msg.editing" ng-submit="update(msg)">
+                      <input type="text" name="text" class="edittext input-block-level" ng-model="msg.text" ng-blur="stopedit(msg)">
+                      <input type="submit" class="cloaked" value="Update">
+                    </form>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="guide" class="well"></div>
+ 
+   <script>
+      var textinputdiv = document.getElementById("textinput");
+      var textoutputdiv = document.getElementById("textoutput");
+      var usernamediv = document.getElementById("username");
+      function getfocus()
+      {
+        //var div = document.getElementById("textinput");
+        //div.focus();
+      }
+      
+      $("#textinput").keyup(function(e) {
+        textinputdiv.style.height = 'auto';
+        textinputdiv.style.height = textinputdiv.scrollHeight+'px';
+        while($(this).outerHeight() < this.scrollHeight + parseFloat($(this).css("borderTopWidth")) + parseFloat($(this).css("borderBottomWidth"))) {
+            $(this).height($(this).height()+1);
+        };
+      });
+      
+      $("#textoutput").keyup(function(e) {
+        getfocus();
+        //console.log("typing");
+        //textinputdiv.style.height = 'auto';
+        //textinputdiv.style.height = textinputdiv.scrollHeight+'px';
+        //while($(this).outerHeight() < this.scrollHeight + parseFloat($(this).css("borderTopWidth")) + parseFloat($(this).css("borderBottomWidth"))) {
+        //    $(this).height($(this).height()+1);
+        //};
+      });
+      $("body").keyup(function(e) {
+        getfocus();
+        //console.log("typing");
+        //textinputdiv.style.height = 'auto';
+        //textinputdiv.style.height = textinputdiv.scrollHeight+'px';
+        //while($(this).outerHeight() < this.scrollHeight + parseFloat($(this).css("borderTopWidth")) + parseFloat($(this).css("borderBottomWidth"))) {
+        //    $(this).height($(this).height()+1);
+        //};
+      });
+      getfocus();
+      document.getElementById("guide").innerHTML = catparsehelp;
+      
+    </script>
+  </body>
+</html>
